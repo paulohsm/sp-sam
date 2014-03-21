@@ -1,0 +1,235 @@
+# This makefile compiles CRM semiprognostic.
+# Paulo Santiago, paulo.santiago@cptec.inpe.br
+# July 2013
+
+FC=gfortran -g -O0 -fbounds-check -Waliasing -Wall -fbacktrace -ffpe-trap=invalid,overflow,zero -finit-real=nan -finit-integer=nan -ffree-line-length-none -Warray-bounds -ffast-math -funroll-loops -ftree-vectorizer-verbose=2 # -fconvert=big-endian
+INC= #-Iinc/
+DBG= #-g -fbounds-check -Wall -fbacktrace -finit-real=nan
+CAMOPTS=-fno-range-check -c
+CRMOPTS=-ffixed-form -ffixed-line-length-132 -c
+EXEC=CRM_SemiProg.x
+
+
+OBJ=\
+	infnan.o \
+	physconst.o \
+	shr_const_mod.o \
+	shr_kind_mod.o \
+	abcoefs.o \
+	adams.o \
+	advect2_xy.o \
+	advect2_z.o \
+	advect_mom.o \
+	advect_scalar2D.o \
+	advect_scalar3D.o \
+	advect_scalar.o \
+	blockdata.o \
+	boundaries.o \
+	buoyancy.o \
+	cloud.o \
+	crmdims.o \
+	crm.o \
+	crmsurface.o \
+	damping.o \
+	diagnose.o \
+	diffuse_mom2D.o \
+	diffuse_mom3D.o \
+	diffuse_mom.o \
+	diffuse_scalar2D.o \
+	diffuse_scalar3D.o \
+	diffuse_scalar.o \
+	fft.o \
+	forcing.o \
+	gammafff.o \
+	kurant.o \
+	precip_fall.o \
+	precip_init.o \
+	precip_proc.o \
+	press_grad.o \
+	press_rhs.o \
+	pressure.o \
+	random.o \
+	sat.o \
+	setparm.o \
+	setperturb.o \
+	shear_prod2D.o \
+	shear_prod3D.o \
+	stepout.o \
+	task_util_dummy.o \
+	tke_full.o \
+	util.o \
+	zero.o \
+	cpr_crm.o
+
+
+model:	$(OBJ) crm_semiprog.F90
+	$(FC) -o $(EXEC) $(INC) $(OBJ) $(DBG) crm_semiprog.F90
+
+cpr_crm.o	:	cpr_crm.F
+	$(FC) -c cpr_crm.F
+
+infnan.o	:	cam/infnan.F90 shr_kind_mod.o
+	$(FC) $(CAMOPTS) cam/infnan.F90
+
+physconst.o	:	cam/physconst.F90 infnan.o shr_const_mod.o shr_kind_mod.o
+	$(FC) $(CAMOPTS) cam/physconst.F90
+
+
+shr_const_mod.o	:	cam/shr_const_mod.F90 shr_kind_mod.o
+	$(FC) $(CAMOPTS) cam/shr_const_mod.F90
+
+shr_kind_mod.o	:	cam/shr_kind_mod.F
+	$(FC) $(CAMOPTS) cam/shr_kind_mod.F
+
+abcoefs.o	:	crm/abcoefs.F 
+	$(FC) $(INC) $(CRMOPTS) crm/abcoefs.F
+
+adams.o	:	crm/adams.F
+	$(FC) $(INC) $(CRMOPTS) crm/adams.F
+
+advect2_xy.o	:	crm/advect2_xy.F
+	$(FC) $(INC) $(CRMOPTS) crm/advect2_xy.F
+
+advect2_z.o	:	crm/advect2_z.F
+	$(FC) $(INC) $(CRMOPTS) crm/advect2_z.F
+
+advect_mom.o	:	crm/advect_mom.F advect2_xy.o advect2_z.o
+	$(FC) $(CRMOPTS) crm/advect_mom.F
+
+advect_scalar2D.o	:	crm/advect_scalar2D.F
+	$(FC) $(INC) $(CRMOPTS) crm/advect_scalar2D.F
+
+advect_scalar3D.o	:	crm/advect_scalar3D.F
+	$(FC) $(INC) $(CRMOPTS) crm/advect_scalar3D.F
+
+advect_scalar.o	:	crm/advect_scalar.F advect_scalar2D.o advect_scalar3D.o
+	$(FC) $(INC) $(CRMOPTS) crm/advect_scalar.F
+
+blockdata.o	:	crm/blockdata.F 
+	$(FC) $(INC) $(CRMOPTS) crm/blockdata.F
+
+boundaries.o	:	crm/boundaries.F
+	$(FC) $(INC) $(CRMOPTS) crm/boundaries.F
+
+buoyancy.o	:	crm/buoyancy.F
+	$(FC) $(INC) $(CRMOPTS) crm/buoyancy.F
+
+cloud.o	:	crm/cloud.F
+	$(FC) $(INC) $(CRMOPTS) crm/cloud.F
+
+crmdims.o	:	crm/crmdims.F90
+	$(FC) $(INC) -c crm/crmdims.F90
+
+crm.o	:	crm/crm.F shr_kind_mod.o physconst.o setparm.o precip_init.o\
+		setperturb.o kurant.o task_util_dummy.o abcoefs.o zero.o\
+		buoyancy.o damping.o forcing.o boundaries.o tke_full.o\
+		advect_mom.o diffuse_mom.o crmsurface.o pressure.o\
+		adams.o advect_scalar.o precip_fall.o diffuse_scalar.o\
+		cloud.o precip_proc.o diagnose.o stepout.o setparm.o\
+		precip_init.o setperturb.o cpr_crm.o
+	$(FC) $(INC) $(CRMOPTS) crm/crm.F
+
+crmsurface.o	:	crm/crmsurface.F
+	$(FC) $(INC) $(CRMOPTS) crm/crmsurface.F
+
+damping.o	:	crm/damping.F task_util_dummy.o
+	$(FC) $(INC) $(CRMOPTS) crm/damping.F
+
+diagnose.o	:	crm/diagnose.F
+	$(FC) $(INC) $(CRMOPTS) crm/diagnose.F
+
+diffuse_mom2D.o	:	crm/diffuse_mom2D.F
+	$(FC) $(INC) $(CRMOPTS) crm/diffuse_mom2D.F
+
+diffuse_mom3D.o	:	crm/diffuse_mom3D.F
+	$(FC) $(INC) $(CRMOPTS) crm/diffuse_mom3D.F
+
+diffuse_mom.o	:	crm/diffuse_mom.F diffuse_mom2D.o diffuse_mom3D.o
+	$(FC) $(INC) $(CRMOPTS) crm/diffuse_mom.F
+
+diffuse_scalar2D.o	:	crm/diffuse_scalar2D.F
+	$(FC) $(INC) $(CRMOPTS) crm/diffuse_scalar2D.F
+
+diffuse_scalar3D.o	:	crm/diffuse_scalar3D.F
+	$(FC) $(INC) $(CRMOPTS) crm/diffuse_scalar3D.F
+
+diffuse_scalar.o	:	crm/diffuse_scalar.F diffuse_scalar2D.o diffuse_scalar3D.o
+	$(FC) $(INC) $(CRMOPTS) crm/diffuse_scalar.F
+
+fft.o	:	crm/fft.F
+	$(FC) $(CRMOPTS) crm/fft.F
+
+forcing.o	:	crm/forcing.F
+	$(FC) $(INC) $(CRMOPTS) crm/forcing.F
+
+gammafff.o	:	crm/gammafff.c
+	cc -c crm/gammafff.c
+
+kurant.o	:	crm/kurant.F stepout.o task_util_dummy.o
+	$(FC) $(INC) $(CRMOPTS) crm/kurant.F
+
+precip_fall.o	:	crm/precip_fall.F
+	$(FC) $(INC) $(CRMOPTS) crm/precip_fall.F
+
+precip_init.o	:	crm/precip_init.F
+	$(FC) $(INC) $(CRMOPTS) crm/precip_init.F
+
+precip_proc.o	:	crm/precip_proc.F
+	$(FC) $(INC) $(CRMOPTS) crm/precip_proc.F
+
+press_grad.o	:	crm/press_grad.F boundaries.o
+	$(FC) $(INC) $(CRMOPTS) crm/press_grad.F
+
+press_rhs.o	:	crm/press_rhs.F boundaries.o
+	$(FC) $(INC) $(CRMOPTS) crm/press_rhs.F
+
+pressure.o	:	crm/pressure.F task_util_dummy.o fft.o press_grad.o\
+			press_rhs.o
+	$(FC) $(INC) $(CRMOPTS) crm/pressure.F
+
+random.o	:	crm/random.F
+	$(FC) $(CRMOPTS) crm/random.F
+
+sat.o	:	crm/sat.F90
+	$(FC) -c crm/sat.F90
+
+setparm.o	:	crm/setparm.F
+	$(FC) $(INC) $(CRMOPTS) crm/setparm.F
+
+setperturb.o	:	crm/setperturb.F random.o
+	$(FC) $(INC) $(CRMOPTS) crm/setperturb.F
+
+shear_prod2D.o	:	crm/shear_prod2D.F
+	$(FC) $(INC) $(CRMOPTS) crm/shear_prod2D.F
+
+shear_prod3D.o	:	crm/shear_prod3D.F
+	$(FC) $(INC) $(CRMOPTS) crm/shear_prod3D.F
+
+stepout.o	:	crm/stepout.F util.o
+	$(FC) $(INC) $(CRMOPTS) crm/stepout.F
+
+task_util_dummy.o	:	crm/task_util_dummy.F
+	$(FC) $(CRMOPTS) crm/task_util_dummy.F
+
+tke_full.o	:	crm/tke_full.F shear_prod2D.o shear_prod3D.o
+	$(FC) $(INC) $(CRMOPTS) crm/tke_full.F
+
+util.o	:	crm/util.F task_util_dummy.o
+	$(FC) $(INC) $(CRMOPTS) crm/util.F
+
+zero.o	:	crm/zero.F
+	$(FC) $(INC) $(CRMOPTS) crm/zero.F
+
+
+.SUFFIXES:
+.SUFFIXES: .f90 .o
+
+
+.f90.o :
+	$(F90) -c  $<
+
+
+clean:
+	-rm -f $(OBJ) 
+	-rm -f $(EXEC) 
+	-rm -f *.mod

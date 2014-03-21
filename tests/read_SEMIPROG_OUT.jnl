@@ -1,0 +1,24 @@
+define axis/x=1:32:1 xcrm
+define axis/y=1:1:1 ycrm
+define axis/z=1:27:1 zcrm
+define grid/x=xcrm/y=ycrm/z=zcrm gcrm
+
+file/grid=gcrm/var=u_crm,v_crm,w_crm,t_crm,q_crm,qn_crm,qp_crm,qc_crm,\
+qi_crm,qpc_crm,qpi_crm,qrs_crm,qrl_crm/format=unf/columns=`32*1*27*11` SEMIPROG_OUT
+
+show data
+
+!list u_crm[i=1:10]
+!list u_crm[i=11:20]
+!list u_crm[i=21:30]
+!list v_crm[i=15:24]
+list u_crm
+list w_crm
+list t_crm
+list q_crm
+list qrs_crm
+
+show grid u_crm
+
+exit
+
