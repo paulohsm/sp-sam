@@ -4,7 +4,7 @@
 
 FC=gfortran -g -O0 -fcheck=all -Waliasing -Wall -fbacktrace -ffpe-trap=invalid,overflow,zero -finit-real=nan -finit-integer=nan -ffree-line-length-none -Warray-bounds -funroll-loops -ftree-vectorizer-verbose=2 #-ffast-math -fconvert=big-endian
 INC= #-Iinc/
-DBG= #-g -fbounds-check -Wall -fbacktrace -finit-real=nan
+DBG=-g -fbounds-check -Wall -fbacktrace -finit-real=nan
 CAMOPTS=-fno-range-check -c
 CRMOPTS=-ffixed-form -ffixed-line-length-132 -c
 EXEC=MCGA_CRM_SemiProg.x

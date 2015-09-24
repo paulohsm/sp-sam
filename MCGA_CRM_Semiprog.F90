@@ -12,15 +12,15 @@ PROGRAM MCGA_CRM_SEMIPROG
 ! 
 !*************************************************************************
 
-USE shr_kind_mod, ONLY: r8 => shr_kind_r8 !, r4 => shr_kind_r4
+USE shr_kind_mod, ONLY: r8 => shr_kind_r8, i4 => shr_kind_i4 !, r4 => shr_kind_r4
 USE physconst,    ONLY: gravit, latvap, latice, cpair, rair, epsilo
 USE crmdims,   ONLY: crm_nx, crm_ny, crm_nz, crm_dx, crm_dy, crm_dt, YES3D
 
 IMPLICIT NONE
 
 ! Variables used to store data read from file SEMIPROG_IN
-INTEGER :: k, l, m, nz, nt !, plev, pplev
-REAL :: iotmp, tstep, long, lati, topo, lsmk
+INTEGER(i4) :: k, l, m, nz, nt !, plev, pplev
+REAL(r8) :: iotmp, tstep, long, lati, topo, lsmk
 CHARACTER(12) :: tlev
 CHARACTER(12), ALLOCATABLE, DIMENSION(:) :: timestamp
 REAL, ALLOCATABLE, DIMENSION(:) :: pslc, usst, vsst, cssf, clsf, ocis, &
@@ -206,7 +206,7 @@ REAL(r8), PARAMETER :: e_s0 = 6.112, t0 = 273., rwv = rair/epsilo
 ! Format specifiers, used for screen output
    11 FORMAT (A11,I4)
    12 FORMAT (A11,F11.3)
-   13 FORMAT (A5,I4,A7,I4,A8,A12,A1)
+   13 FORMAT (A5,I4,A8,I4,A8,A12,A1)
    14 FORMAT (I3,F6.0,F7.2,F9.2,F8.2,X,E11.4,2F8.2,2(X,E11.4),E11.4)
 !  14 FORMAT (I3,F6.0,F7.2,F9.2,F8.2,F12.8,2F8.2,2F15.10)
    15 FORMAT (6(ES11.4,X)) !(5F15.10,F15.8)
@@ -223,7 +223,7 @@ WRITE(*,12) "crm_dx  = ", crm_dx
 WRITE(*,12) "crm_dy  = ", crm_dy 
 WRITE(*,12) "crm_dt  = ", crm_dt
 WRITE(*,*)    "YES3D?  = ", YES3D, "(1 - 3D CRM, 0 - 2D CRM)"
-WRITE(*,*)
+!WRITE(*,*)
 
 
 
@@ -246,7 +246,7 @@ END DO
 
 44 CONTINUE
 
-! Reading time-varying input data stored in SEMIPRO_IN, step 2:
+! Reading time-varying input data stored in SEMIPROG_IN, step 2:
 ! Effectivelly read the data
 nt = nt + 1
 REWIND(31)
@@ -270,13 +270,20 @@ DO l=1,nt-1
    END DO
 END DO
 
+
+WRITE(*,*) "Start time = ", timestamp(1)
+WRITE(*,*) "Number of global time iterations = ", nt + 1
+WRITE(*,*)
+
+
 nt = nt - 1
 plev = nz
 pplev = nz + 1
 dt_gl = tstep !3600._r8 !tstep
-dt_gl = 86400. !10800. !7200. !3600.
+!dt_gl = 86400. !10800. !7200. !3600.
 phis = topo * gravit
 ocnfrac = 0. !lsmk
+
 
 !*************************************************************************
 ! Pressure and pressure layer thickness (t1, pdel), constants
@@ -336,13 +343,13 @@ ALLOCATE(tl(plev), ql(plev), qcl(plev), qci(plev), &
 
 OPEN(33,FILE='SEMIPROG_OUT',STATUS='unknown',ACTION='write',IOSTAT=io_out)
 
-WRITE(33,*) crm_nx, crm_ny, nz, nt, dt_gl, long, lati, topo, ocnfrac
+WRITE(33,*) timestamp(1), crm_nx, crm_ny, nz, nt, dt_gl, long, lati, topo, ocnfrac
 WRITE(33,*) pmid
 WRITE(33,*) pdel
 
 !*************************************************************************
 DO l=1,nt ! the main time loop
-   WRITE(*,13) "Step ", l, " out of", nt, " (time: ", timestamp(l), ")"
+   WRITE(*,13) "Step ", l, " out of ", nt, " (time: ", timestamp(l), ")"
 
 ! Initializing vertical level heights
    tave = 0.5_r8  * ( temp(2,l) + temp(1,l) )
@@ -370,8 +377,8 @@ DO l=1,nt ! the main time loop
       m = plev - k + 1
       tl(k)   = temp(m,l)
       ql(k)   = umes(m,l)
-      qcl(k)  = liqm(m,l) !0.25 !cond(m,l) !liqm(m,l) !!+ .1_r8 ! add this to cause clouds and rain
-      qci(k)  = icem(m,l) !!+ .1_r8
+      qcl(k)  = .1_r8 !liqm(m,l) !0.25 !cond(m,l) !liqm(m,l) !!+ .1_r8 ! add this to cause clouds and rain
+      qci(k)  = 0._r8 !icem(m,l) !!+ .1_r8
       ul(k)   = uvel(m,l)
       vl(k)   = vvel(m,l)
       qrs(k)  = swrh(m,l)
@@ -386,7 +393,8 @@ DO l=1,nt ! the main time loop
 
    ps = pslc(l)
 
-! L-S tendencies; according to CAM3's tphysbc.F90, they all starts null
+! L-S tendencies; according to CAM3's tphysbc.F90, they all starts null 
+! every large-scale (global) time iteration
    DO k=1,plev
       ultend(k)  = 0.
       vltend(k)  = 0.
