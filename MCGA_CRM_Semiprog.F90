@@ -194,12 +194,6 @@ REAL(r8), ALLOCATABLE, DIMENSION(:,:) :: e_s, q_s, cond
 REAL(r8), PARAMETER :: e_s0 = 6.112, t0 = 273.16, rwv = rair/epsilo
 !REAL(r8) :: tcel
 
-! Variables used by condensation subroutine
-REAL(r8), ALLOCATABLE, DIMENSION(:) :: prc, &  ! grid scale r_c mixing ratio (kg/kg)
-                                       pri, &  ! grid scale r_i (kg/kg)
-                                       pmflx, &! convective mass flux (kg/(s m^2))
-                                       pcldfr  ! fractional cloudiness (between 0 and 1)
-
 
 ! Roughly speaking, for code clarification purposes, we have three 
 ! 'classes' of variables. The first are variables used to get data stored 
@@ -327,7 +321,7 @@ DO l=1,nt
 ! of saturated (liquid + ice) water
 !     cond(k,l) = umes(k,l) - q_s(k,l)
       cond(k,l) = q_s(k,l) - umes(k,l)
-!     IF (cond(k,l).le.0.) cond(k,l) = 0.
+      IF (cond(k,l).le.0.) cond(k,l) = 0.
    END DO
 END DO
 !PRINT*, latvap/1000._r8, rwv, epsilo
@@ -346,7 +340,6 @@ ALLOCATE(tl(plev), ql(plev), qcl(plev), qci(plev), &
         fluxsgs_qt(plev), flux_qp(plev), pflx(plev), qt_ls(plev), &
         qt_trans(plev), qp_trans(plev), qp_fall(plev), qp_evp(plev), &
         qp_src(plev), t_ls(plev) )
-ALLOCATE(prc(plev), pri(plev), pmflx(plev), pcldfr(plev))
 
 ! SEMIPROG_OUT, the file which receives the semiprognostic test output
 ! ... declare here the file opening
@@ -360,7 +353,6 @@ WRITE(33,*) pdel
 !*************************************************************************
 ! The first time iteration uses zero mass flux profile in condensation
 ! subroutine
-pmflx(:) = 0.0
 
 DO l=1,nt ! the main time loop
    WRITE(*,13) "Step ", l, " out of ", nt, " (time: ", timestamp(l), ")"
@@ -391,53 +383,13 @@ DO l=1,nt ! the main time loop
       m = plev - k + 1
       tl(k)   = temp(m,l)
       ql(k)   = umes(m,l)
-      qcl(k)  = cond(m,l) !.1_r8 !liqm(m,l) !0.25 !cond(m,l) !liqm(m,l) !!+ .1_r8 ! add this to cause clouds and rain
+      qcl(k)  = 0._r8 !cond(m,l) !.1_r8 !liqm(m,l) !0.25 !cond(m,l) !liqm(m,l) !!+ .1_r8 ! add this to cause clouds and rain
       qci(k)  = 0._r8 !icem(m,l) !!+ .1_r8
       ul(k)   = uvel(m,l)
       vl(k)   = vvel(m,l)
       qrs(k)  = swrh(m,l)
       qrl(k)  = lwrh(m,l)
       zmid(k) = t2(m)
-   END DO
-
-
-! Prescribing a profile of liquid water content based on 
-! https://www.ral.ucar.edu/asr2001/icing-section_files/image008.gif
-!   qcl(1:19) = 0.05_r8
-!   qcl(20) = 0.1 !0.1_r8
-!   qcl(21) = 0.1 !0.8_r8
-!   qcl(22) = 0.1 !0.7_r8
-!   qcl(23) = 0.3_r8
-!   qcl(24) = 0.3_r8
-!   qcl(25) = 0.2_r8
-!   qcl(26:28) = 0.001_r8
-
-!   qcl(:) = 0.0_r8
-
-
-! artifitially prescribing some cloud water content
-!  qcl(17)    = 0.05 ! 725 hPa
-!  qcl(18:22) = 0.1  ! from 850 hPa to 750hPa
-!  qcl(23)    = 0.05 ! 875 hPa
-
-! Computing cloud condensate with Jean-Pierre Chaboureau's Statistical Cloud
-! Parameterization
-! Chaboureau, J.-P. and P. Bechtold, 2002: A simple cloud parameterization from 
-! cloud resolving model data: Theory and application. 
-! J. Atmos. Sci., 59, 2362-2372   
-! http://mesonh.aero.obs-mip.fr/chaboureau/PUB/NCL/
-   prc(:) = 0.0
-   pri(:) = 0.0
-   pmflx(:) = 0.0
-
- !  CALL condensation(1, plev, 1, 1, 1, 1, 100*pres, t2, temp(:,l), umes(:,l), &
- !                    prc, pri, pmflx, pcldfr, .true.)
-
-   DO k=1,plev
-      m = plev - k + 1
- !     qcl(k) = prc(m)
- !     qci(k) = pri(m)
- !     print*, k, qcl(k), qci(k)
    END DO
 
 ! Surface pressure
@@ -630,12 +582,6 @@ DO l=1,nt ! the main time loop
    WRITE(33,*) qp_evp
    WRITE(33,*) qp_src
    WRITE(33,*) t_ls
-
-!  Providing an updated mass flux to condensation subroutine
-   DO k=1,plev
-      m = plev - k + 1
-      pmflx(k) = mc(m)
-   END DO
 
 END DO   
 
