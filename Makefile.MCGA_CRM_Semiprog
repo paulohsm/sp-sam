@@ -59,11 +59,15 @@ OBJ=\
 	tke_full.o \
 	util.o \
 	zero.o \
-	cpr_crm.o
+	cpr_crm.o \
+	condensation.o
 
 
 model:	$(OBJ) MCGA_CRM_Semiprog.F90
 	$(FC) -o $(EXEC) $(INC) $(OBJ) $(DBG) MCGA_CRM_Semiprog.F90
+
+condensation.o	:	condensation.f90
+	${FC} -c condensation.f90
 
 cpr_crm.o	:	cpr_crm.F
 	$(FC) -c cpr_crm.F
@@ -227,7 +231,6 @@ zero.o	:	crm/zero.F
 
 .f90.o :
 	$(F90) -c  $<
-
 
 clean:
 	-rm -f $(OBJ) 

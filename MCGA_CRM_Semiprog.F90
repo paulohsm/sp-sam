@@ -191,8 +191,14 @@ REAL(r8), ALLOCATABLE, DIMENSION(:) :: t1, t2 ! temporary variables aimed
 
 ! Variables and constants used by cloud condensate estimative
 REAL(r8), ALLOCATABLE, DIMENSION(:,:) :: e_s, q_s, cond
-REAL(r8), PARAMETER :: e_s0 = 6.112, t0 = 273., rwv = rair/epsilo
+REAL(r8), PARAMETER :: e_s0 = 6.112, t0 = 273.16, rwv = rair/epsilo
 !REAL(r8) :: tcel
+
+! Variables used by condensation subroutine
+REAL(r8), ALLOCATABLE, DIMENSION(:) :: prc, &  ! grid scale r_c mixing ratio (kg/kg)
+                                       pri, &  ! grid scale r_i (kg/kg)
+                                       pmflx, &! convective mass flux (kg/(s m^2))
+                                       pcldfr  ! fractional cloudiness (between 0 and 1)
 
 
 ! Roughly speaking, for code clarification purposes, we have three 
@@ -207,13 +213,16 @@ REAL(r8), PARAMETER :: e_s0 = 6.112, t0 = 273., rwv = rair/epsilo
    11 FORMAT (A11,I4)
    12 FORMAT (A11,F11.3)
    13 FORMAT (A5,I4,A8,I4,A8,A12,A1)
-   14 FORMAT (I3,F6.0,F7.2,F9.2,F8.2,X,E11.4,2F8.2,2(X,E11.4),E11.4)
+   14 FORMAT (I3,F6.0,F7.2,F9.2,F8.2,X,2E12.4,2F8.2,2(X,E11.4),F3.6)
 !  14 FORMAT (I3,F6.0,F7.2,F9.2,F8.2,F12.8,2F8.2,2F15.10)
    15 FORMAT (6(ES11.4,X)) !(5F15.10,F15.8)
    16 FORMAT (4(ES11.4,X)) !(4F15.10,4F7.4)
 
 ! Printing some information to tell the user what's happening
-WRITE(*,*) "Semi-prognostic test of SP-CAM superparameterization"
+!WRITE(*,*) "Semi-prognostic test of SP-CAM superparameterization"
+WRITE(*,*) "**********************"
+WRITE(*,*) "SP-SAM Diagnostic Test"
+WRITE(*,*) "**********************"
 WRITE(*,*) 
 WRITE(*,*) "CRM grid description"
 WRITE(*,11) "crm_nx  = ", crm_nx
@@ -222,9 +231,8 @@ WRITE(*,11) "crm_nz  = ", crm_nz
 WRITE(*,12) "crm_dx  = ", crm_dx
 WRITE(*,12) "crm_dy  = ", crm_dy 
 WRITE(*,12) "crm_dt  = ", crm_dt
-WRITE(*,*)    "YES3D?  = ", YES3D, "(1 - 3D CRM, 0 - 2D CRM)"
+WRITE(*,*)  "YES3D?  = ", YES3D, "(1 - 3D CRM, 0 - 2D CRM)"
 !WRITE(*,*)
-
 
 
 ! Reading time-varying input data stored in SEMIPRO_IN, step 1:
@@ -311,14 +319,15 @@ END DO
 ALLOCATE(e_s(nz,nt), q_s(nz,nt), cond(nz,nt))
 DO l=1,nt
    DO k=1,nz
-      e_s(k,l) = e_s0 * exp ( (latvap/rwv) * (1/t0 - temp(k,l) ) )
-      q_s(k,l) = epsilo * ( e_s(k,l) / (pmid(k)-(1-epsilo)*e_s(k,l) ) )
+      e_s(k,l) = e_s0 * exp ( (latvap/rwv) * (1/t0 - 1/temp(k,l) ) )
+      !q_s(k,l) = epsilo * e_s(k,l) / ( (pmid(k)-(1-epsilo)*e_s(k,l) ) )
+      q_s(k,l) = epsilo * e_s(k,l) / pmid(k)
 ! The current approach assumes that the difference between the observed
 ! specific humidity and saturation specific humidity is the actual amount
 ! of saturated (liquid + ice) water
-      cond(k,l) = umes(k,l) - q_s(k,l)
-!     cond(k,l) = q_s(k,l) - umes(k,l)
-      IF (cond(k,l).le.0.) cond(k,l) = 0.
+!     cond(k,l) = umes(k,l) - q_s(k,l)
+      cond(k,l) = q_s(k,l) - umes(k,l)
+!     IF (cond(k,l).le.0.) cond(k,l) = 0.
    END DO
 END DO
 !PRINT*, latvap/1000._r8, rwv, epsilo
@@ -337,6 +346,7 @@ ALLOCATE(tl(plev), ql(plev), qcl(plev), qci(plev), &
         fluxsgs_qt(plev), flux_qp(plev), pflx(plev), qt_ls(plev), &
         qt_trans(plev), qp_trans(plev), qp_fall(plev), qp_evp(plev), &
         qp_src(plev), t_ls(plev) )
+ALLOCATE(prc(plev), pri(plev), pmflx(plev), pcldfr(plev))
 
 ! SEMIPROG_OUT, the file which receives the semiprognostic test output
 ! ... declare here the file opening
@@ -348,6 +358,10 @@ WRITE(33,*) pmid
 WRITE(33,*) pdel
 
 !*************************************************************************
+! The first time iteration uses zero mass flux profile in condensation
+! subroutine
+pmflx(:) = 0.0
+
 DO l=1,nt ! the main time loop
    WRITE(*,13) "Step ", l, " out of ", nt, " (time: ", timestamp(l), ")"
 
@@ -377,7 +391,7 @@ DO l=1,nt ! the main time loop
       m = plev - k + 1
       tl(k)   = temp(m,l)
       ql(k)   = umes(m,l)
-      qcl(k)  = .1_r8 !liqm(m,l) !0.25 !cond(m,l) !liqm(m,l) !!+ .1_r8 ! add this to cause clouds and rain
+      qcl(k)  = cond(m,l) !.1_r8 !liqm(m,l) !0.25 !cond(m,l) !liqm(m,l) !!+ .1_r8 ! add this to cause clouds and rain
       qci(k)  = 0._r8 !icem(m,l) !!+ .1_r8
       ul(k)   = uvel(m,l)
       vl(k)   = vvel(m,l)
@@ -386,11 +400,47 @@ DO l=1,nt ! the main time loop
       zmid(k) = t2(m)
    END DO
 
+
+! Prescribing a profile of liquid water content based on 
+! https://www.ral.ucar.edu/asr2001/icing-section_files/image008.gif
+!   qcl(1:19) = 0.05_r8
+!   qcl(20) = 0.1 !0.1_r8
+!   qcl(21) = 0.1 !0.8_r8
+!   qcl(22) = 0.1 !0.7_r8
+!   qcl(23) = 0.3_r8
+!   qcl(24) = 0.3_r8
+!   qcl(25) = 0.2_r8
+!   qcl(26:28) = 0.001_r8
+
+!   qcl(:) = 0.0_r8
+
+
 ! artifitially prescribing some cloud water content
 !  qcl(17)    = 0.05 ! 725 hPa
 !  qcl(18:22) = 0.1  ! from 850 hPa to 750hPa
 !  qcl(23)    = 0.05 ! 875 hPa
 
+! Computing cloud condensate with Jean-Pierre Chaboureau's Statistical Cloud
+! Parameterization
+! Chaboureau, J.-P. and P. Bechtold, 2002: A simple cloud parameterization from 
+! cloud resolving model data: Theory and application. 
+! J. Atmos. Sci., 59, 2362-2372   
+! http://mesonh.aero.obs-mip.fr/chaboureau/PUB/NCL/
+   prc(:) = 0.0
+   pri(:) = 0.0
+   pmflx(:) = 0.0
+
+ !  CALL condensation(1, plev, 1, 1, 1, 1, 100*pres, t2, temp(:,l), umes(:,l), &
+ !                    prc, pri, pmflx, pcldfr, .true.)
+
+   DO k=1,plev
+      m = plev - k + 1
+ !     qcl(k) = prc(m)
+ !     qci(k) = pri(m)
+ !     print*, k, qcl(k), qci(k)
+   END DO
+
+! Surface pressure
    ps = pslc(l)
 
 ! L-S tendencies; according to CAM3's tphysbc.F90, they all starts null 
@@ -422,6 +472,10 @@ DO l=1,nt ! the main time loop
       qrl_crm(:,:,k) = qrl(m) / (cpair * pdel(m))
    END DO
    prec_crm(:,:) = 0
+
+   open(73, FILE='q_crm.txt', STATUS='unknown', ACTION='write', IOSTAT=io_out)
+   write(73,*) q_crm
+   close(73)
 
 ! Initializing radiation variables
    fsds_crm(:,:)    = ocis(l)
@@ -492,10 +546,10 @@ DO l=1,nt ! the main time loop
 
 ! Checking input profiles
 !  WRITE(*,*) "  1    3.   7.00 39645.50  239.11  0.00001540  -17.74   -3.49   0.0000000000  -0.0000448116"
-   WRITE(*,*) " k pres    pdel   zmid      tl    ql            ul      vl    qrs         qrl"
+   WRITE(*,*) " k pres    pdel   zmid      tl    ql         qcl           ul      vl    qrs         qrl"
    DO k=1,plev
       WRITE(*,14) k, pmid(k), pdel(k), zmid(k), tl(k), ql(k), &
-                         ul(k), vl(k), qrs(k), qrl(k), qcl(k)
+                  qcl(k), ul(k), vl(k), qrs(k), qrl(k), q_s(k,l)
    END DO   
 
 ! The crm subrotine call
@@ -525,6 +579,8 @@ DO l=1,nt ! the main time loop
       taux_crm, tauy_crm, z0m, timing_factor)
 
 ! Writing some output to stdout
+   WRITE(*,*)
+   WRITE(*,*) "Check some output:"
    WRITE(*,*) "ultend      vltend      qltend      qcltend     qcitend     sltend"
    WRITE(*,15) ultend(plev), vltend(plev), qltend(plev), &
            qcltend(plev), qcitend(plev), sltend(plev)
@@ -574,6 +630,13 @@ DO l=1,nt ! the main time loop
    WRITE(33,*) qp_evp
    WRITE(33,*) qp_src
    WRITE(33,*) t_ls
+
+!  Providing an updated mass flux to condensation subroutine
+   DO k=1,plev
+      m = plev - k + 1
+      pmflx(k) = mc(m)
+   END DO
+
 END DO   
 
 END PROGRAM MCGA_CRM_SEMIPROG
