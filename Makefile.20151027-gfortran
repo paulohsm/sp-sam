@@ -1,0 +1,145 @@
+# This makefile compiles CRM semiprognostic.
+# Paulo Santiago, paulo.santiago@cptec.inpe.br
+# December 2013
+
+
+FC=gfortran -g -O0 -fcheck=all -Waliasing -Wall -fbacktrace -ffpe-trap=invalid,overflow,zero -finit-real=nan -finit-integer=nan -ffree-line-length-none -Warray-bounds -funroll-loops -ftree-vectorizer-verbose=2 #-ffast-math -fconvert=big-endian
+INC= #-Iinc/
+DBG=-g -fbounds-check -Wall -fbacktrace -finit-real=nan
+CAMOPTS=-fno-range-check -c
+CRMOPTS=-ffixed-form -ffixed-line-length-132 -c
+EXEC=MCGA_CRM_SemiProg.x
+
+
+CRMSRC = crm/abcoefs.F \
+         crm/adams.F \
+         crm/advect2_xy.F \
+         crm/advect2_z.F \
+         crm/advect_scalar2D.F \
+         crm/advect_scalar3D.F \
+         crm/blockdata.F \
+         crm/boundaries.F \
+         crm/buoyancy.F \
+         crm/cloud.F \
+         crm/crmdims.F90 \
+         crm/crmsurface.F \
+         crm/diagnose.F \
+         crm/diffuse_mom2D.F \
+         crm/diffuse_mom3D.F \
+         crm/diffuse_scalar2D.F \
+         crm/diffuse_scalar3D.F \
+         crm/fft.F \
+         crm/forcing.F \
+         crm/gammafff.c \
+         crm/precip_fall.F \
+         crm/precip_init.F \
+         crm/precip_proc.F \
+         crm/random.F \
+         crm/sat.F90 \
+         crm/setparm.F \
+         crm/shear_prod2D.F \
+         crm/shear_prod3D.F \
+         crm/task_util_dummy.F \
+         crm/zero.F
+
+OBJ = shr_kind_mod.o \
+      physconst.o \
+      condensation.o \
+      crmdims.o \
+      crm.o
+      
+
+# rule to create the executable
+model:	$(OBJ) MCGA_CRM_Semiprog.F90
+	$(FC) $(DBG) -o $(EXEC) MCGA_CRM_Semiprog.F90 $(OBJ) $(INC)
+
+
+# cam objects
+shr_kind_mod.o	:	cam/shr_kind_mod.F
+	$(FC) $(CAMOPTS) cam/shr_kind_mod.F -o obj/
+
+infnan.o	:	cam/infnan.F90 shr_kind_mod.o
+	$(FC) $(CAMOPTS) cam/infnan.F90 -o obj/
+
+shr_const_mod.o	:	cam/shr_const_mod.F90 shr_kind_mod.o
+	$(FC) $(CAMOPTS) cam/shr_const_mod.F90 -o obj/
+
+physconst.o	:	cam/physconst.F90 infnan.o shr_const_mod.o shr_kind_mod.o
+	$(FC) $(CAMOPTS) cam/physconst.F90 -o obj/
+
+
+# statistical cloud parameterization
+condensation.o	:	condensation.f90
+	${FC} -c condensation.f90 -o obj/
+
+
+# crm objects
+cpr_crm.o	:	cpr_crm.F
+	$(FC) -c cpr_crm.F -o obj/
+
+$(CRMOBJ)	:	obj/%.o	:	$(CRMSRC)
+	$(FC) $(CRMOPTS) $(INC) -c $(CRMSRC) -o obj/
+
+advect_mom.o	:	crm/advect_mom.F advect2_xy.o advect2_z.o
+	$(FC) $(CRMOPTS) crm/advect_mom.F -o obj/
+
+advect_scalar.o	:	crm/advect_scalar.F advect_scalar2D.o advect_scalar3D.o
+	$(FC) $(INC) $(CRMOPTS) crm/advect_scalar.F -o obj/
+
+damping.o	:	crm/damping.F task_util_dummy.o
+	$(FC) $(INC) $(CRMOPTS) crm/damping.F -o obj/
+
+diffuse_mom.o	:	crm/diffuse_mom.F diffuse_mom2D.o diffuse_mom3D.o
+	$(FC) $(INC) $(CRMOPTS) crm/diffuse_mom.F -o obj/
+
+diffuse_scalar.o	:	crm/diffuse_scalar.F diffuse_scalar2D.o\
+				diffuse_scalar3D.o
+	$(FC) $(INC) $(CRMOPTS) crm/diffuse_scalar.F -o obj/
+
+kurant.o	:	crm/kurant.F stepout.o task_util_dummy.o
+	$(FC) $(INC) $(CRMOPTS) crm/kurant.F -o obj/
+
+press_grad.o	:	crm/press_grad.F boundaries.o
+	$(FC) $(INC) $(CRMOPTS) crm/press_grad.F -o obj/
+
+press_rhs.o	:	crm/press_rhs.F boundaries.o
+	$(FC) $(INC) $(CRMOPTS) crm/press_rhs.F -o obj/
+
+pressure.o	:	crm/pressure.F task_util_dummy.o fft.o press_grad.o\
+			press_rhs.o
+	$(FC) $(INC) $(CRMOPTS) crm/pressure.F -o obj/
+
+setperturb.o	:	crm/setperturb.F random.o
+	$(FC) $(INC) $(CRMOPTS) crm/setperturb.F -o obj/
+
+stepout.o	:	crm/stepout.F util.o
+	$(FC) $(INC) $(CRMOPTS) crm/stepout.F -o obj/
+
+tke_full.o	:	crm/tke_full.F shear_prod2D.o shear_prod3D.o
+	$(FC) $(INC) $(CRMOPTS) crm/tke_full.F -o obj/
+
+util.o	:	crm/util.F task_util_dummy.o
+	$(FC) $(INC) $(CRMOPTS) crm/util.F -o obj/
+
+crm.o	:	crm/crm.F shr_kind_mod.o physconst.o setparm.o precip_init.o\
+		setperturb.o kurant.o task_util_dummy.o abcoefs.o zero.o\
+		buoyancy.o damping.o forcing.o boundaries.o tke_full.o\
+		advect_mom.o diffuse_mom.o crmsurface.o pressure.o\
+		adams.o advect_scalar.o precip_fall.o diffuse_scalar.o\
+		cloud.o precip_proc.o diagnose.o stepout.o setparm.o\
+		precip_init.o setperturb.o cpr_crm.o
+	$(FC) $(INC) $(CRMOPTS) crm/crm.F -o obj/
+
+
+.SUFFIXES:
+.SUFFIXES: .f90 .o
+
+
+.f90.o :
+	$(F90) -c  $<
+
+
+clean:
+	-rm -f $(OBJ) 
+	-rm -f $(EXEC) 
+	-rm -f *.mod
