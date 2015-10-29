@@ -194,6 +194,14 @@ REAL(r8), ALLOCATABLE, DIMENSION(:,:) :: e_s, q_s, cond
 REAL(r8), PARAMETER :: e_s0 = 6.112, t0 = 273.16, rwv = rair/epsilo
 !REAL(r8) :: tcel
 
+! Variables used by statistical cloud parameterization (condensation 
+! subroutine)
+REAL, ALLOCATABLE, DIMENSION(:) :: prc, & ! cloud water mixing ratio (kg/kg)
+        pri,   & ! cloud ice mixing ratio (kg/kg)
+        pmflx, & ! convective mass flux (kg/(s m^2))
+        pcldfr,& ! fractional cloudiness (between 0 and 1)
+        hgh
+
 
 ! Roughly speaking, for code clarification purposes, we have three 
 ! 'classes' of variables. The first are variables used to get data stored 
@@ -207,7 +215,7 @@ REAL(r8), PARAMETER :: e_s0 = 6.112, t0 = 273.16, rwv = rair/epsilo
    11 FORMAT (A11,I4)
    12 FORMAT (A11,F11.3)
    13 FORMAT (A5,I4,A8,I4,A8,A12,A1)
-   14 FORMAT (I3,F6.0,F7.2,F9.2,F8.2,X,2E12.4,2F8.2,2(X,E11.4),F3.6)
+   14 FORMAT (I3,F6.0,F7.2,F9.2,F8.2,3E12.4,2F8.2,2(X,E11.4),F3.6)
 !  14 FORMAT (I3,F6.0,F7.2,F9.2,F8.2,F12.8,2F8.2,2F15.10)
    15 FORMAT (6(ES11.4,X)) !(5F15.10,F15.8)
    16 FORMAT (4(ES11.4,X)) !(4F15.10,4F7.4)
@@ -339,6 +347,7 @@ ALLOCATE(tl(plev), ql(plev), qcl(plev), qci(plev), &
         fluxsgs_qt(plev), flux_qp(plev), pflx(plev), qt_ls(plev), &
         qt_trans(plev), qp_trans(plev), qp_fall(plev), qp_evp(plev), &
         qp_src(plev), t_ls(plev) )
+ALLOCATE(hgh(plev), prc(plev), pri(plev), pmflx(plev), pcldfr(plev))
 
 ! SEMIPROG_OUT, the file which receives the semiprognostic test output
 ! ... declare here the file opening
@@ -375,50 +384,30 @@ DO l=1,nt ! the main time loop
    END DO
    zint(1) = 2.0_r8 * t2(nz) - t2(plev)
 
-! Initializing large-scale profiles
-! SEMIPROG_IN profiles are vertically reversed in relation to CAM3, which 
-! are originally read by CRM superparm.
-   DO k=1,plev
-      m = plev - k + 1
-      tl(k)   = temp(m,l)
-      ql(k)   = umes(m,l)
-     !qcl(k)  = .1_r8 !.04_r8 !liqm(m,l) !0.25 !cond(m,l) !liqm(m,l) !!+ .1_r8 ! add this to cause clouds and rain
-      qci(k)  = 0._r8 !icem(m,l) !!+ .1_r8
-      ul(k)   = uvel(m,l)
-      vl(k)   = vvel(m,l)
-      qrs(k)  = swrh(m,l)
-      qrl(k)  = lwrh(m,l)
-      zmid(k) = t2(m)
-   END DO
+! Initializing large-scale profiles: SEMIPROG_IN profiles are vertically 
+! reversed in relation to CAM3, which are originally read by CRM superparm.
+   tl = temp(plev:1:-1,l)
+   ql = umes(plev:1:-1,l)
+   ul = uvel(plev:1:-1,l)
+   vl = vvel(plev:1:-1,l)
+   qrs = swrh(plev:1:-1,l)
+   qrl = lwrh(plev:1:-1,l)
+   zmid = t2(plev:1:-1)
    
-   qcl(1) = 0.000_r8
-   qcl(2) = 0.000_r8
-   qcl(3) = 0.000_r8
-   qcl(4) = 0.000_r8
-   qcl(5) = 0.000_r8
-   qcl(6) = 0.000_r8
-   qcl(7) = 0.000_r8
-   qcl(8) = 0.020_r8
-   qcl(9) = 0.050_r8
-   qcl(10) = 0.05_r8 !0.070_r8
-   qcl(11) = 0.050_r8
-   qcl(12) = 0.010_r8
-   qcl(13) = 0.060_r8
-   qcl(14) = 0.040_r8
-   qcl(15) = 0.030_r8
-   qcl(16) = 0.025_r8
-   qcl(17) = 0.020_r8
-   qcl(18) = 0.020_r8
-   qcl(19) = 0.025_r8
-   qcl(20) = 0.027_r8
-   qcl(21) = 0.028_r8
-   qcl(22) = 0.045_r8 !0.029_r8
-   qcl(23) = 0.040_r8 !0.025_r8
-   qcl(24) = 0.020_r8
-   qcl(25) = 0.015_r8
-   qcl(26) = 0.010_r8
-   qcl(27) = 0.005_r8
-   qcl(28) = 0.002_r8
+
+! Using a simple statistical parameterization of cloud water related 
+! variables, after Chaboureau and Bechtold (2002), to estimate cloud 
+! liquid water content:
+   hgh = t2
+   prc(:) = 0.0
+   pri(:) = 0.0
+   pmflx(:) = 0.0
+   pcldfr(:) = 0.0
+   CALL condensation(1, plev, 1, 1, 1, 1, 100*pres(:), hgh, temp(:,l), &
+           umes(:,l), prc(:), pri(:), pmflx(:), pcldfr(:), .TRUE.)
+
+   qcl = prc(plev:1:-1) * 1000
+   qci = pri(plev:1:-1) * 100
 
 ! Surface pressure
    ps = pslc(l)
@@ -441,8 +430,8 @@ DO l=1,nt ! the main time loop
       v_crm(:,:,k)   = vl(m)
       w_crm(:,:,k)   = 0. 
       t_crm(:,:,k)   = tl(m)
-      q_crm(:,:,k)   = ql(m) + qcl(m)/1000. + qci(m) ! total water
-      qn_crm(:,:,k)  = qcl(m)/1000. + qci(m) ! cloud water and ice
+      q_crm(:,:,k)   = ql(m) + qcl(m) + qci(m) ! total water
+      qn_crm(:,:,k)  = qcl(m) + qci(m) ! cloud water and ice
       qp_crm(:,:,k)  = 0. ! precipitation
       qc_crm(:,:,k)  = 0.
       qi_crm(:,:,k)  = 0.
@@ -526,10 +515,10 @@ DO l=1,nt ! the main time loop
 
 ! Checking input profiles
 !  WRITE(*,*) "  1    3.   7.00 39645.50  239.11  0.00001540  -17.74   -3.49   0.0000000000  -0.0000448116"
-   WRITE(*,*) " k pres    pdel   zmid      tl     ql          qcl           ul      vl    qrs         qrl"
+   WRITE(*,*) " k pres    pdel   zmid      tl     ql         qcl         qci           ul      vl    qrs         qrl"
    DO k=1,plev
       WRITE(*,14) k, pmid(k), pdel(k), zmid(k), tl(k), ql(k), &
-                  qcl(k)/1000., ul(k), vl(k), qrs(k), qrl(k)
+                  qcl(k), qci(k), ul(k), vl(k), qrs(k), qrl(k)
    END DO   
 
 ! The crm subrotine call
