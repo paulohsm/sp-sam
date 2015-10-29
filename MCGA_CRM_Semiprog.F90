@@ -281,8 +281,7 @@ WRITE(*,*)
 nt = nt - 1
 plev = nz
 pplev = nz + 1
-dt_gl = tstep !3600._r8 !tstep
-!dt_gl = 86400. !10800. !7200. !3600.
+dt_gl = tstep !3600._r8
 phis = topo * gravit
 ocnfrac = 0. !lsmk
 
@@ -383,7 +382,7 @@ DO l=1,nt ! the main time loop
       m = plev - k + 1
       tl(k)   = temp(m,l)
       ql(k)   = umes(m,l)
-      qcl(k)  = 0._r8 !cond(m,l) !.1_r8 !liqm(m,l) !0.25 !cond(m,l) !liqm(m,l) !!+ .1_r8 ! add this to cause clouds and rain
+     !qcl(k)  = .1_r8 !.04_r8 !liqm(m,l) !0.25 !cond(m,l) !liqm(m,l) !!+ .1_r8 ! add this to cause clouds and rain
       qci(k)  = 0._r8 !icem(m,l) !!+ .1_r8
       ul(k)   = uvel(m,l)
       vl(k)   = vvel(m,l)
@@ -391,6 +390,35 @@ DO l=1,nt ! the main time loop
       qrl(k)  = lwrh(m,l)
       zmid(k) = t2(m)
    END DO
+   
+   qcl(1) = 0.000_r8
+   qcl(2) = 0.000_r8
+   qcl(3) = 0.000_r8
+   qcl(4) = 0.000_r8
+   qcl(5) = 0.000_r8
+   qcl(6) = 0.000_r8
+   qcl(7) = 0.000_r8
+   qcl(8) = 0.020_r8
+   qcl(9) = 0.050_r8
+   qcl(10) = 0.05_r8 !0.070_r8
+   qcl(11) = 0.050_r8
+   qcl(12) = 0.010_r8
+   qcl(13) = 0.060_r8
+   qcl(14) = 0.040_r8
+   qcl(15) = 0.030_r8
+   qcl(16) = 0.025_r8
+   qcl(17) = 0.020_r8
+   qcl(18) = 0.020_r8
+   qcl(19) = 0.025_r8
+   qcl(20) = 0.027_r8
+   qcl(21) = 0.028_r8
+   qcl(22) = 0.045_r8 !0.029_r8
+   qcl(23) = 0.040_r8 !0.025_r8
+   qcl(24) = 0.020_r8
+   qcl(25) = 0.015_r8
+   qcl(26) = 0.010_r8
+   qcl(27) = 0.005_r8
+   qcl(28) = 0.002_r8
 
 ! Surface pressure
    ps = pslc(l)
@@ -413,8 +441,8 @@ DO l=1,nt ! the main time loop
       v_crm(:,:,k)   = vl(m)
       w_crm(:,:,k)   = 0. 
       t_crm(:,:,k)   = tl(m)
-      q_crm(:,:,k)   = ql(m) + qcl(m) + qci(m) ! total water
-      qn_crm(:,:,k)  = qcl(m) + qci(m) ! cloud water and ice
+      q_crm(:,:,k)   = ql(m) + qcl(m)/1000. + qci(m) ! total water
+      qn_crm(:,:,k)  = qcl(m)/1000. + qci(m) ! cloud water and ice
       qp_crm(:,:,k)  = 0. ! precipitation
       qc_crm(:,:,k)  = 0.
       qi_crm(:,:,k)  = 0.
@@ -498,10 +526,10 @@ DO l=1,nt ! the main time loop
 
 ! Checking input profiles
 !  WRITE(*,*) "  1    3.   7.00 39645.50  239.11  0.00001540  -17.74   -3.49   0.0000000000  -0.0000448116"
-   WRITE(*,*) " k pres    pdel   zmid      tl    ql         qcl           ul      vl    qrs         qrl"
+   WRITE(*,*) " k pres    pdel   zmid      tl     ql          qcl           ul      vl    qrs         qrl"
    DO k=1,plev
       WRITE(*,14) k, pmid(k), pdel(k), zmid(k), tl(k), ql(k), &
-                  qcl(k), ul(k), vl(k), qrs(k), qrl(k), q_s(k,l)
+                  qcl(k)/1000., ul(k), vl(k), qrs(k), qrl(k)
    END DO   
 
 ! The crm subrotine call
@@ -536,15 +564,16 @@ DO l=1,nt ! the main time loop
    WRITE(*,*) "ultend      vltend      qltend      qcltend     qcitend     sltend"
    WRITE(*,15) ultend(plev), vltend(plev), qltend(plev), &
            qcltend(plev), qcitend(plev), sltend(plev)
-   WRITE(*,*) "precc       precl       precsc      precsl"
-   WRITE(*,16) precc, precl, precsc, precsl
+   WRITE(*,*) "precc       precl       precsc      precsl (mm/h)"
+   WRITE(*,16) precc*1000*3600, precl*1000*3600, &
+           precsc*1000*3600, precsl*1000*3600
    WRITE(*,*) "cltot       clhgh       clmed       cllow"
    WRITE(*,16) cltot, clhgh, clmed, cllow
    WRITE(*,*) 
 
 ! File output: SEMIPROG_OUT
-   WRITE(33,*) precc, precl, precsc, precsl, cltot, clhgh, clmed, cllow, &
-           taux_crm, tauy_crm, z0m, prectend, precstend
+   WRITE(33,*) precc, precl, precsc, precsl, cltot, clhgh, &
+           clmed, cllow, taux_crm, tauy_crm, z0m, prectend, precstend
    WRITE(33,*) zmid
    WRITE(33,*) ultend
    WRITE(33,*) vltend
